@@ -2,16 +2,22 @@ pipeline:
   setup-db:
     image: postgres:16
     commands:
-      # 直接変数を定義して確実に渡す
-      - export DB_HOST="woodpecker-db-cluster.cluster-cbuqsk2gi5o4.ap-northeast-1.rds.amazonaws.com"
-      - export PGPASSWORD="password123"
-      # echoで値が入っているかログで視認できるようにする
-      - echo "Connecting to $DB_HOST"
-      - psql -h $DB_HOST -U postgres -d testdb -f src/sql/01_schema.sql
-      - psql -h $DB_HOST -U postgres -d testdb -f src/sql/02_seed.sql
+      - 'export DB_HOST="woodpecker-db-cluster.cluster-cbuqsk2gi5o4.ap-northeast-1.rds.amazonaws.com"'
+      - 'export PGPASSWORD="password123"'
+      - 'psql -h $DB_HOST -U postgres -d testdb -f src/sql/01_schema.sql'
+    when:
+      - event: push
+        branch: main
+      - event: manual     # GUIからの手動実行を許可
+      - event: deployment # デプロイメントとして手動トリガーする場合
 
   test:
     image: ovhcom/venom:latest
     commands:
-      - export DB_HOST="woodpecker-db-cluster.cluster-cbuqsk2gi5o4.ap-northeast-1.rds.amazonaws.com"
-      - venom run src/tests/*.venom.yml --var "db_url=postgres://postgres:password123@$DB_HOST:5432/testdb" --var "api_url=https://[api-id].execute-api.ap-northeast-1.amazonaws.com/dev"
+      - 'export DB_HOST="woodpecker-db-cluster.cluster-cbuqsk2gi5o4.ap-northeast-1.rds.amazonaws.com"'
+      - 'venom run src/tests/*.venom.yml --var "db_url=postgres://postgres:password123@$DB_HOST:5432/testdb" --var "api_url=https://[api-id].execute-api.ap-northeast-1.amazonaws.com/dev"'
+    when:
+      - event: push
+        branch: main
+      - event: manual
+      - event: deployment
