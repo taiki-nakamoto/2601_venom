@@ -5,18 +5,17 @@ pipeline:
       - 'export DB_HOST="woodpecker-db-cluster.cluster-cbuqsk2gi5o4.ap-northeast-1.rds.amazonaws.com"'
       - 'export PGPASSWORD="password123"'
       - 'psql -h $DB_HOST -U postgres -d testdb -f src/sql/01_schema.sql'
+      - 'psql -h $DB_HOST -U postgres -d testdb -f src/sql/02_seed.sql'
     when:
       - event: push
         branch: main
-      - event: manual     # GUIからの手動実行を許可
-      - event: deployment # デプロイメントとして手動トリガーする場合
+      - event: manual
+      - event: deployment
 
-    
-test:
+  test:  # <--- ここ！ setup-db と縦のラインを揃える（重要）
     image: ovhcom/venom:latest
     commands:
       - 'export DB_HOST="woodpecker-db-cluster.cluster-cbuqsk2gi5o4.ap-northeast-1.rds.amazonaws.com"'
-      # 末尾を /dev までに設定
       - 'venom run src/tests/*.venom.yml --var "db_url=postgres://postgres:password123@$DB_HOST:5432/testdb" --var "api_url=https://evvok66e72.execute-api.ap-northeast-1.amazonaws.com/dev"'
     when:
       - event: push
