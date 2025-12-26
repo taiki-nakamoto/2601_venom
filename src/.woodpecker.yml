@@ -1,0 +1,18 @@
+pipeline:
+  setup-db:
+    image: postgres:16 # psqlコマンドを使うためにpostgresイメージを使用
+    commands:
+      # PGPASSWORD環境変数を使ってパスワードを指定し、SQLファイルを実行
+      - export PGPASSWORD=password123
+      - psql -h ${DB_ENDPOINT} -U postgres -d testdb -f sql/01_schema.sql
+      - psql -h ${DB_ENDPOINT} -U postgres -d testdb -f sql/02_seed.sql
+    environment:
+      - DB_ENDPOINT=aurora-endpoint # 実際のエンドポイントに置き換える
+
+  test:
+    image: ovhcom/venom:latest
+    commands:
+      # Venomを実行。-varでDBの接続先などを動的に渡せます
+      - venom run tests/*.venom.yml --var "db_url=postgres://postgres:password123@${DB_ENDPOINT}:5432/testdb" --var "api_url=https://[api-id].execute-api.ap-northeast-1.amazonaws.com/dev"
+    environment:
+      - DB_ENDPOINT=aurora-endpoint # 実際のエンドポイントに置き換える

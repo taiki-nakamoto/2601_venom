@@ -1,0 +1,14 @@
+# --- Terraform ---
+# どこにある .terraform ディレクトリも無視する
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+
+# --- Docker & Data ---
+**/woodpecker-data/
+**/docker-compose.override.yml
+
+# --- その他 ---
+.DS_Store
+.env*

@@ -1,0 +1,32 @@
+name: API Integration Test with Aurora
+vars:
+  api_url: "https://fallback-url.com" # --var で上書き可能
+  db_url: "postgres://postgres:password123@localhost:5432/testdb"
+
+testcases:
+  - name: Check API response after DB update
+    steps:
+      # ステップ1: Auroraのデータを書き換える
+      # (テーブル作成とシードデータは setup-db ステップで完了済み)
+      - type: dbfixtures
+        database: postgres
+        dsn: "{{.db_url}}"
+        commands:
+          - "UPDATE users SET status = 'active', updated_by = 'venom_test' WHERE id = 100;"
+
+      # ステップ2: API Gateway (Mock) を叩く
+      - type: http
+        method: GET
+        url: "{{.api_url}}/users/100"
+        assertions:
+          - result.statuscode ShouldEqual 200
+          - result.bodyjson.id ShouldEqual 100
+          - result.bodyjson.status ShouldEqual "active" # DB書き換え後の期待値
+          - result.bodyjson.updated_by ShouldEqual "venom_test"
+
+      # ステップ3: 異常系のテスト（例：存在しないユーザー）
+      - type: http
+        method: GET
+        url: "{{.api_url}}/users/999"
+        assertions:
+          - result.statuscode ShouldEqual 404
