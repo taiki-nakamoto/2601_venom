@@ -4,6 +4,7 @@
 **/.terraform.lock.hcl
 *.tfstate
 *.tfstate.*
+src/secrets.txt
 
 # --- Docker & Data ---
 **/woodpecker-data/
