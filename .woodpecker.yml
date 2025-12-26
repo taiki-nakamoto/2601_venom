@@ -2,18 +2,16 @@ pipeline:
   setup-db:
     image: postgres:16
     commands:
-      - export PGPASSWORD=password123
-      # ${DB_ENDPOINT} ではなく $DB_ENDPOINT に修正
-      # sqlファイルへのパスを src/sql/... に修正
-      - psql -h $DB_ENDPOINT -U postgres -d testdb -f src/sql/01_schema.sql
-      - psql -h $DB_ENDPOINT -U postgres -d testdb -f src/sql/02_seed.sql
-    environment:
-      - DB_ENDPOINT=woodpecker-db-cluster.cluster-cbuqsk2gi5o4.ap-northeast-1.rds.amazonaws.com
+      # 直接変数を定義して確実に渡す
+      - export DB_HOST="woodpecker-db-cluster.cluster-cbuqsk2gi5o4.ap-northeast-1.rds.amazonaws.com"
+      - export PGPASSWORD="password123"
+      # echoで値が入っているかログで視認できるようにする
+      - echo "Connecting to $DB_HOST"
+      - psql -h $DB_HOST -U postgres -d testdb -f src/sql/01_schema.sql
+      - psql -h $DB_HOST -U postgres -d testdb -f src/sql/02_seed.sql
 
   test:
     image: ovhcom/venom:latest
     commands:
-      # こちらも $DB_ENDPOINT に修正。テストファイルも src/tests/... に修正
-      - venom run src/tests/*.venom.yml --var "db_url=postgres://postgres:password123@$DB_ENDPOINT:5432/testdb" --var "api_url=https://[api-id].execute-api.ap-northeast-1.amazonaws.com/dev"
-    environment:
-      - DB_ENDPOINT=woodpecker-db-cluster.cluster-cbuqsk2gi5o4.ap-northeast-1.rds.amazonaws.com
+      - export DB_HOST="woodpecker-db-cluster.cluster-cbuqsk2gi5o4.ap-northeast-1.rds.amazonaws.com"
+      - venom run src/tests/*.venom.yml --var "db_url=postgres://postgres:password123@$DB_HOST:5432/testdb" --var "api_url=https://[api-id].execute-api.ap-northeast-1.amazonaws.com/dev"
