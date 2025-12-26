@@ -11,4 +11,4 @@
 
 # --- その他 ---
 .DS_Store
-.env*
+.env*src/secrets.txt

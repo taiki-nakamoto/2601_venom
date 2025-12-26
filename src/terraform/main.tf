@@ -147,7 +147,7 @@ resource "aws_instance" "woodpecker_server" {
   user_data = <<-EOF
               #!/bin/bash
               dnf update -y
-              dnf install -y docker
+              dnf install -y docker git
               systemctl enable --now docker
               # Docker Composeインストール
               curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
