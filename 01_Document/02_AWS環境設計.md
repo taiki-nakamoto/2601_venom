@@ -47,12 +47,142 @@ graph TD
 
 Woodpecker CIをホストし、Venomテストを実行するメインサーバーです。
 
+#### B-1. EC2インスタンス基本情報
+
 | 設定項目 | 詳細 | 設計値 | 備考 |
 |---------|------|--------|------|
 | インスタンスタイプ | - | t3.medium | 2 vCPU / 4GB RAM (ビルド時の安定性重視) |
-| AMI | - | Amazon Linux 2023 | 最新のECS最適化または標準AMI |
+| AMI | - | Amazon Linux 2023 | 動的取得（最新版を自動選択） |
+| アーキテクチャ | - | x86_64 | - |
+| 仮想化タイプ | - | hvm | - |
 | Elastic IP | - | 1つ取得・紐付け | GitHubのWebhook先を固定するため |
 | IAM ロール | - | AmazonSSMManagedInstanceCore | SSHキー不要でログイン可能にする |
+| ストレージ | EBS gp3 | 8GB (デフォルト) | ログやDockerイメージ用 |
+
+#### B-2. オペレーティングシステム (OS)
+
+| 項目 | 詳細 | 備考 |
+|------|------|------|
+| OS名 | Amazon Linux 2023 | - |
+| カーネル | Linux 5.15+ | AL2023の標準カーネル |
+| パッケージマネージャー | dnf (yum後継) | `dnf install` でパッケージ管理 |
+| systemd | 有効 | サービス管理（Docker等） |
+| SELinux | Enforcing (デフォルト) | セキュリティ強化モード |
+
+#### B-3. インストール済みミドルウェア
+
+EC2起動時（user_data）に以下がインストールされます。
+
+**基本パッケージ**:
+
+| パッケージ名 | バージョン | 用途 |
+|------------|----------|------|
+| Docker | 最新版 (26.x+) | Woodpecker/Venomのコンテナ実行環境 |
+| Docker Compose | 最新版 (v2.x+) | Woodpeckerのマルチコンテナ管理 |
+| Git | 最新版 (2.x+) | リポジトリクローン |
+
+**インストールコマンド** (user_data):
+```bash
+#!/bin/bash
+dnf update -y
+dnf install -y docker git
+systemctl enable --now docker
+
+# Docker Composeインストール
+curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+```
+
+#### B-4. Woodpecker CI構成
+
+**Woodpecker Server** (woodpecker-server):
+
+| 項目 | 詳細 |
+|------|------|
+| イメージ | woodpeckerci/woodpecker-server:latest |
+| ポート | 8000 (HTTP UI) |
+| 認証方式 | GitHub OAuth |
+| データ永続化 | Named Volume: woodpecker-server-data |
+| 環境変数 | WOODPECKER_HOST, WOODPECKER_GITHUB_CLIENT, WOODPECKER_GITHUB_SECRET 等 |
+
+**Woodpecker Agent** (woodpecker-agent):
+
+| 項目 | 詳細 |
+|------|------|
+| イメージ | woodpeckerci/woodpecker-agent:latest |
+| 役割 | パイプライン実行（Docker in Docker） |
+| Docker接続 | /var/run/docker.sock マウント |
+| 環境変数 | WOODPECKER_SERVER, WOODPECKER_AGENT_SECRET |
+
+#### B-5. Venom構成
+
+Venomは**Woodpeckerパイプライン内でDockerコンテナとして実行**されます。
+
+| 項目 | 詳細 |
+|------|------|
+| イメージ | ovhcom/venom:latest |
+| 実行タイミング | `.woodpecker.yml` の `test` ステップ |
+| テスト定義 | `tests/api_db_test.venom.yml` |
+| 実行コマンド | `venom run tests/*.venom.yml --var "db_url=..." --var "api_url=..."` |
+| サポート機能 | HTTP (API Gateway), DBFixtures (PostgreSQL) |
+
+#### B-6. EC2上のディレクトリ構成
+
+```
+/home/ec2-user/
+├── 2601_venom/                   # GitHubからクローンしたリポジトリ
+│   ├── src/
+│   │   ├── docker-compose.yml    # Woodpecker起動設定
+│   │   ├── .woodpecker.yml       # パイプライン定義
+│   │   ├── sql/                  # DBスキーマ・シードデータ
+│   │   │   ├── 01_schema.sql
+│   │   │   └── 02_seed.sql
+│   │   ├── tests/                # Venomテスト定義
+│   │   │   └── api_db_test.venom.yml
+│   │   ├── setup.sh              # 初回セットアップスクリプト
+│   │   ├── secrets.txt           # GitHub Personal Access Token (gitignore済)
+│   │   └── README.md
+│   ├── 01_Document/
+│   └── 03_Research/
+
+/var/lib/docker/
+└── volumes/
+    └── woodpecker-server-data/   # Woodpecker永続データ
+        ├── woodpecker.db          # SQLiteデータベース
+        └── ...
+```
+
+#### B-7. ポート情報
+
+| ポート | プロトコル | 用途 | 公開範囲 |
+|--------|----------|------|---------|
+| 22 | TCP | SSH (EC2 Instance Connect) | 0.0.0.0/0 (テスト用) |
+| 8000 | TCP | Woodpecker UI | 0.0.0.0/0 (ブラウザアクセス用) |
+| 443 | TCP (Out) | GitHub API / API Gateway | Egress All |
+| 5432 | TCP (Out) | Aurora PostgreSQL | Egress All |
+
+**セキュリティ上の注意**:
+- 本番環境では、ポート22とポート8000のソースを特定のIPアドレスに制限してください
+- 現在の設定（0.0.0.0/0）は検証用の簡易設定です
+
+#### B-8. リソース使用率の目安
+
+**CPU**:
+- アイドル時: 5-10%
+- パイプライン実行中: 30-60%
+- ピーク時: 80% (複数コンテナ起動時)
+
+**メモリ**:
+- Woodpecker Server/Agent: 約200-300MB
+- Venom実行時: 約50-100MB
+- PostgreSQLクライアント: 約20-50MB
+- 合計: 約500MB-1GB (4GBのうち)
+
+**ディスク**:
+- OS: 約2GB
+- Docker イメージ: 約2-3GB
+- ログ・キャッシュ: 約500MB-1GB
+- 空き容量: 約2-3GB
 
 ### C. セキュリティグループ (SG)
 
