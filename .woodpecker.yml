@@ -16,7 +16,7 @@ pipeline:
     image: ovhcom/venom:latest
     commands:
       - 'export DB_HOST="woodpecker-db-cluster.cluster-cbuqsk2gi5o4.ap-northeast-1.rds.amazonaws.com"'
-      - 'venom run src/tests/*.venom.yml --var "db_url=postgres://postgres:password123@$DB_HOST:5432/testdb" --var "api_url=https://evvok66e72.execute-api.ap-northeast-1.amazonaws.com/dev"'
+      - 'venom run src/tests/*.venom.yml --var "db_url=postgres://postgres:password123@$DB_HOST:5432/testdb" --var "api_url=https://8fb47xdz6i.execute-api.ap-northeast-1.amazonaws.com/dev"'
     when:
       - event: push
         branch: main
